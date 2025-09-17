@@ -7,6 +7,11 @@ import time
 from datetime import datetime
 import httpx
 import os
+from dotenv import load_dotenv
+from common.monitoring import track_request_metrics, API_GATEWAY_REQUESTS
+
+# 加载环境变量
+load_dotenv()
 
 # 配置日志
 logging.basicConfig(
@@ -24,20 +29,42 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# 配置CORS
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://localhost:8080",
-    "https://your-frontend-domain.com"
-]
+# 集成监控中间件
+app.middleware("http")(track_request_metrics())
 
+# 配置CORS
+# 从环境变量中获取允许的源，逗号分隔
+allowed_origins_str = os.environ.get("ALLOWED_ORIGINS", "")
+if allowed_origins_str:
+    origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+else:
+    # 默认值，适用于开发环境
+    origins = [
+        "http://localhost",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        # 生产环境应该通过环境变量设置
+    ]
+
+# 从环境变量中获取前端API URL
+frontend_api_url = os.environ.get("NEXT_PUBLIC_API_URL", "")
+if frontend_api_url and frontend_api_url not in origins:
+    origins.append(frontend_api_url)
+
+# 配置CORS中间件
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=[
+        "Authorization", 
+        "Content-Type", 
+        "Accept",
+        "X-Request-ID"
+    ],
+    expose_headers=["Content-Disposition", "X-Total-Count"],
+    max_age=600  # 预检请求的缓存时间（秒）
 )
 
 # 微服务URL配置

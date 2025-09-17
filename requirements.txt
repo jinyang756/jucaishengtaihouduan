@@ -44,6 +44,8 @@ dateparser==1.1.8
 # 安全
 hashing==0.2.3
 oauthlib==3.2.2
+passlib==1.7.4
+bcrypt==4.0.1
 
 # Vercel Edge Config
 git+https://github.com/vercel/edge-config-python.git

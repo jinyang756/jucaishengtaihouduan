@@ -1,7 +1,7 @@
-import redis
 import json
 from datetime import timedelta
 import os
+import redis
 
 class RedisCache:
     def __init__(self):

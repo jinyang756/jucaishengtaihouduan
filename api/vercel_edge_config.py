@@ -17,7 +17,13 @@ class EdgeConfig:
             self.is_mock = True
             # 模拟Edge Config中的默认值
             self.mock_data = {
-                'greeting': {'message': 'Welcome to the Green Ecology Fund API!'}
+                'greeting': {'message': 'Welcome to the Green Ecology Fund API!'},
+                # 添加默认的数据库配置项
+                'DB_HOST': os.environ.get('DB_HOST', 'localhost'),
+                'DB_PORT': os.environ.get('DB_PORT', '3306'),
+                'DB_USER': os.environ.get('DB_USER', 'root'),
+                'DB_PASSWORD': os.environ.get('DB_PASSWORD', 'password'),
+                'DB_NAME': os.environ.get('DB_NAME', 'green_ecology_fund')
             }
         else:
             self.is_mock = False
@@ -41,7 +47,13 @@ class EdgeConfig:
                 # 解析失败时切换到模拟模式
                 self.is_mock = True
                 self.mock_data = {
-                    'greeting': {'message': 'Welcome to the Green Ecology Fund API!'}
+                    'greeting': {'message': 'Welcome to the Green Ecology Fund API!'},
+                    # 添加默认的数据库配置项
+                    'DB_HOST': os.environ.get('DB_HOST', 'localhost'),
+                    'DB_PORT': os.environ.get('DB_PORT', '3306'),
+                    'DB_USER': os.environ.get('DB_USER', 'root'),
+                    'DB_PASSWORD': os.environ.get('DB_PASSWORD', 'password'),
+                    'DB_NAME': os.environ.get('DB_NAME', 'green_ecology_fund')
                 }
     
     def extract_token_from_connection_string(self):
@@ -96,6 +108,19 @@ class EdgeConfig:
         except Exception as e:
             print(f"Exception when fetching from Edge Config: {e}")
             # 出错时返回默认值
+            return default
+    
+    def get_sync(self, key, default=None):
+        """同步版本的get方法，在非异步环境中使用"""
+        if self.is_mock:
+            # 模拟环境下直接返回模拟数据
+            return self.mock_data.get(key, default)
+        
+        try:
+            # 使用asyncio.run来运行异步get方法
+            return asyncio.run(self.get(key, default))
+        except Exception as e:
+            print(f"Error in sync get from Edge Config: {e}")
             return default
     
     async def getAll(self):

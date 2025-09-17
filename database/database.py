@@ -69,8 +69,21 @@ async def get_db_config_from_edge():
         return DEFAULT_DB_CONFIG
 
 # 创建数据库引擎
-database_url = get_database_url()
-engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
+# 增加连接池配置，提高连接稳定性
+engine = create_engine(
+    database_url,
+    pool_pre_ping=True,           # 连接前检查有效性
+    pool_recycle=300,             # 连接回收时间（秒）
+    pool_size=10,                 # 连接池大小
+    max_overflow=20,              # 最大额外连接数
+    pool_timeout=30,              # 连接等待超时（秒）
+    echo=False,                   # 禁用SQL语句日志输出
+    connect_args={
+        'connect_timeout': 10,    # 连接超时（秒）
+        'read_timeout': 30,       # 读取超时（秒）
+        'write_timeout': 30       # 写入超时（秒）
+    }
+)
 
 # 创建会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

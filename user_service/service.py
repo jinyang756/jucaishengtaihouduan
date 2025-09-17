@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .models import User, UserHolding, Transaction, UserStatus
 from .schemas import (
@@ -13,6 +15,14 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 import secrets
+from starlette import status
+# 添加passlib和bcrypt用于密码哈希
+from passlib.context import CryptContext
+import re
+import logging
+
+# 配置日志
+logger = logging.getLogger("user_service")
 
 app = FastAPI(
     title="用户服务",
@@ -20,11 +30,67 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 添加CORS中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("ALLOWED_ORIGINS", "http://localhost,http://localhost:3000").split(","),  # 从环境变量获取，默认值用于开发环境
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=[
+        "Authorization", 
+        "Content-Type", 
+        "Accept",
+        "X-Request-ID"
+    ],
+    expose_headers=["Content-Disposition", "X-Total-Count"],
+    max_age=600  # 预检请求的缓存时间（秒）
+)
+
+# 创建密码上下文对象，使用bcrypt算法
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=14)  # 增加rounds参数增强安全性
+
+# 密码复杂度验证函数
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """验证密码复杂度
+    要求：
+    - 至少8个字符
+    - 包含至少一个大写字母
+    - 包含至少一个小写字母
+    - 包含至少一个数字
+    - 包含至少一个特殊字符
+    """
+    if len(password) < 8:
+        return False, "密码长度至少为8个字符"
+    if not re.search(r"[A-Z]", password):
+        return False, "密码必须包含至少一个大写字母"
+    if not re.search(r"[a-z]", password):
+        return False, "密码必须包含至少一个小写字母"
+    if not re.search(r"[0-9]", password):
+        return False, "密码必须包含至少一个数字"
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "密码必须包含至少一个特殊字符"
+    return True, "密码复杂度符合要求"
+
 # 密码加密函数
 def hash_password(password: str) -> str:
-    """简单的密码哈希实现（生产环境应使用更安全的方式）"""
-    # 为了简单起见，这里使用sha256哈希，实际项目应使用更安全的加密方式
-    return hashlib.sha256(password.encode()).hexdigest()
+    """使用bcrypt算法对密码进行哈希处理"""
+    # 先验证密码复杂度
+    is_valid, message = validate_password_strength(password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    return pwd_context.hash(password)
+
+# 密码验证函数
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码是否匹配"""
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        logger.error(f"密码验证失败: {str(e)}")
+        return False
 
 # 生成会话ID
 def generate_session_id() -> str:
@@ -77,7 +143,7 @@ def login_user(login_data: UserLoginRequest, db: Session) -> dict:
         )
     
     # 验证密码
-    if user.password_hash != hash_password(login_data.password):
+    if not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
@@ -94,7 +160,7 @@ def login_user(login_data: UserLoginRequest, db: Session) -> dict:
     user.last_login_at = datetime.utcnow()
     db.commit()
     
-    # 生成会话ID（简化实现，实际项目应使用JWT）
+    # 生成会话ID
     session_id = generate_session_id()
     
     # 将会话存储在Redis中（有效期24小时）
@@ -150,200 +216,134 @@ def update_user(user_id: str, update_data: UserUpdateRequest, db: Session) -> Us
     return UserResponse.from_orm(user)
 
 # 更新用户余额
-def update_balance(user_id: str, update_data: BalanceUpdateRequest, action: str, db: Session) -> float:
-    """更新用户余额"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if action == "deposit":
-        user.balance += update_data.amount
-    elif action == "withdraw":
-        if user.balance < update_data.amount:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Insufficient balance"
-            )
-        user.balance -= update_data.amount
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid action"
-        )
-    
-    db.commit()
-    return user.balance
-
-# 获取用户持仓
-def get_user_holdings(user_id: str, db: Session) -> list:
-    """获取用户持仓列表"""
-    holdings = db.query(UserHolding).filter(UserHolding.user_id == user_id).all()
-    return [HoldingResponse.from_orm(holding) for holding in holdings]
-
-# 获取用户交易记录
-def get_user_transactions(user_id: str, db: Session, page: int = 1, per_page: int = 10) -> PaginatedTransactionsResponse:
-    """获取用户交易记录"""
-    skip = (page - 1) * per_page
-    
-    # 查询总记录数
-    total = db.query(Transaction).filter(Transaction.user_id == user_id).count()
-    
-    # 查询分页记录
-    transactions = db.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.created_at.desc()).offset(skip).limit(per_page).all()
-    
-    return PaginatedTransactionsResponse(
-        total=total,
-        page=page,
-        per_page=per_page,
-        total_pages=(total + per_page - 1) // per_page,
-        transactions=[TransactionResponse.from_orm(t) for t in transactions]
-    )
+def update_balance(user_id: str, update_data: BalanceUpdateRequest, operation_type: str, db: Session):
+    """
+    更新用户余额
+    使用事务确保数据一致性
+    """
+    try:
+        # 开始事务
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        amount = update_data.amount
+        
+        if operation_type == "deposit":
+            user.balance += amount
+        elif operation_type == "withdraw":
+            if user.balance < amount:
+                raise HTTPException(status_code=400, detail="Insufficient balance")
+            user.balance -= amount
+        else:
+            raise HTTPException(status_code=400, detail="Invalid operation type")
+        
+        db.commit()
+        db.refresh(user)
+        return user.balance
+    except Exception as e:
+        # 发生异常时回滚事务
+        db.rollback()
+        # 如果是我们主动抛出的HTTPException，重新抛出
+        if isinstance(e, HTTPException):
+            raise
+        # 其他异常转为500错误
+        raise HTTPException(status_code=500, detail=f"Failed to update balance: {str(e)}")
 
 # 创建交易
-def create_transaction(transaction_data: TransactionRequest, user_id: str, db: Session) -> TransactionResponse:
-    """创建交易"""
+def create_transaction(user_id: str, transaction_data: TransactionCreateRequest, db: Session):
+    """
+    创建交易记录
+    使用事务确保数据一致性
+    """
     try:
+        # 开始事务
         # 检查用户是否存在
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+            raise HTTPException(status_code=404, detail="User not found")
         
-        # 模拟获取基金当前净值（实际应从基金服务获取）
-        # 简化实现，假设所有基金当前净值为1.0
-        unit_price = 1.0
+        # 检查基金是否存在
+        fund = db.query(Fund).filter(Fund.id == transaction_data.fund_id).first()
+        if not fund:
+            raise HTTPException(status_code=404, detail="Fund not found")
         
-        # 计算手续费（简化实现，统一为交易金额的0.5%）
-        fee_rate = 0.005  # 0.5%
-        fee = transaction_data.amount * fee_rate
+        # 计算交易金额
+        transaction_amount = transaction_data.shares * fund.nav
         
+        # 根据交易类型执行不同的逻辑
         if transaction_data.transaction_type == "buy":
-            # 买入交易
             # 检查余额是否充足
-            if user.balance < transaction_data.amount:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Insufficient balance"
-                )
+            if user.balance < transaction_amount:
+                raise HTTPException(status_code=400, detail="Insufficient balance")
+            # 扣减余额
+            user.balance -= transaction_amount
             
-            # 计算份额
-            shares = (transaction_data.amount - fee) / unit_price
-            
-            # 创建交易记录
-            transaction = Transaction(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                fund_id=transaction_data.fund_id,
-                transaction_type="buy",
-                amount=transaction_data.amount,
-                shares=shares,
-                unit_price=unit_price,
-                fee=fee,
-                net_amount=transaction_data.amount - fee,
-                status="completed",
-                transaction_mode=transaction_data.transaction_mode,
-                scheduled_date=transaction_data.scheduled_date,
-                completed_at=datetime.utcnow()
-            )
-            
-            # 扣减用户余额
-            user.balance -= transaction_data.amount
-            
-            # 更新或创建持仓记录
+            # 更新用户持仓
             holding = db.query(UserHolding).filter(
-                UserHolding.user_id == user_id,
+                UserHolding.user_id == user_id, 
                 UserHolding.fund_id == transaction_data.fund_id
             ).first()
             
             if holding:
-                # 已有持仓，更新份额
-                total_shares = holding.shares + shares
-                holding.purchase_cost = (holding.shares * holding.purchase_cost + shares * unit_price) / total_shares
-                holding.shares = total_shares
-                holding.current_value = total_shares * unit_price
-                holding.profit_loss = holding.current_value - (holding.shares * holding.purchase_cost)
+                # 如果已有持仓，增加份额
+                holding.shares += transaction_data.shares
             else:
-                # 新建持仓
+                # 如果没有持仓，创建新的持仓记录
                 holding = UserHolding(
-                    id=str(uuid.uuid4()),
                     user_id=user_id,
                     fund_id=transaction_data.fund_id,
-                    shares=shares,
-                    purchase_cost=unit_price,
-                    current_value=shares * unit_price,
-                    profit_loss=0.0
+                    shares=transaction_data.shares,
+                    purchase_price=fund.nav
                 )
                 db.add(holding)
-                
         elif transaction_data.transaction_type == "sell":
-            # 卖出交易
-            # 检查持仓是否存在且份额充足
+            # 检查持仓是否足够
             holding = db.query(UserHolding).filter(
-                UserHolding.user_id == user_id,
+                UserHolding.user_id == user_id, 
                 UserHolding.fund_id == transaction_data.fund_id
             ).first()
             
-            if not holding or holding.shares < transaction_data.amount:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Insufficient shares"
-                )
+            if not holding or holding.shares < transaction_data.shares:
+                raise HTTPException(status_code=400, detail="Insufficient shares")
             
-            # 计算卖出份额对应的金额
-            sell_amount = transaction_data.amount * unit_price
-            fee = sell_amount * fee_rate
-            net_amount = sell_amount - fee
+            # 减少持仓份额
+            holding.shares -= transaction_data.shares
             
-            # 创建交易记录
-            transaction = Transaction(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                fund_id=transaction_data.fund_id,
-                transaction_type="sell",
-                amount=sell_amount,
-                shares=transaction_data.amount,
-                unit_price=unit_price,
-                fee=fee,
-                net_amount=net_amount,
-                status="completed",
-                transaction_mode=transaction_data.transaction_mode,
-                scheduled_date=transaction_data.scheduled_date,
-                completed_at=datetime.utcnow()
-            )
-            
-            # 更新用户余额
-            user.balance += net_amount
-            
-            # 更新持仓
-            holding.shares -= transaction_data.amount
+            # 如果持仓份额为0，删除持仓记录
             if holding.shares == 0:
-                # 持仓为0，删除持仓记录
                 db.delete(holding)
-            else:
-                # 更新持仓价值和盈亏
-                holding.current_value = holding.shares * unit_price
-                holding.profit_loss = holding.current_value - (holding.shares * holding.purchase_cost)
+            
+            # 增加余额
+            user.balance += transaction_amount
+        else:
+            raise HTTPException(status_code=400, detail="Invalid transaction type")
         
+        # 创建交易记录
+        transaction = Transaction(
+            user_id=user_id,
+            fund_id=transaction_data.fund_id,
+            shares=transaction_data.shares,
+            transaction_price=fund.nav,
+            transaction_type=transaction_data.transaction_type,
+            transaction_date=datetime.datetime.now(),
+            status="completed"
+        )
         db.add(transaction)
+        
+        # 提交事务
         db.commit()
         db.refresh(transaction)
         
-        return TransactionResponse.from_orm(transaction)
-    except HTTPException:
-        # 已定义的HTTP异常直接抛出
-        raise
+        return transaction
     except Exception as e:
-        # 其他异常回滚事务
+        # 发生异常时回滚事务
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Transaction failed: {str(e)}"
-        )
+        # 如果是我们主动抛出的HTTPException，重新抛出
+        if isinstance(e, HTTPException):
+            raise
+        # 其他异常转为500错误
+        raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
 
 # 认证依赖项
 def get_current_user(session_id: str = Header(None), db: Session = Depends(get_db)):
@@ -415,33 +415,84 @@ def api_update_user(user_id: str, update_data: UserUpdateRequest, db: Session = 
     return update_user(user_id, update_data, db)
 
 @app.post("/users/{user_id}/balance/deposit")
-def api_deposit_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db)):
+def api_deposit_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """充值余额API"""
+    # 确保用户只能操作自己的账户
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this resource"
+        )
     new_balance = update_balance(user_id, update_data, "deposit", db)
     return {"balance": new_balance}
 
 @app.post("/users/{user_id}/balance/withdraw")
-def api_withdraw_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db)):
+def api_withdraw_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """提现余额API"""
+    # 确保用户只能操作自己的账户
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this resource"
+        )
     new_balance = update_balance(user_id, update_data, "withdraw", db)
     return {"balance": new_balance}
+
 # 获取用户持仓
 @app.get("/users/{user_id}/holdings", response_model=list[HoldingResponse])
-def api_get_user_holdings(user_id: str, db: Session = Depends(get_db)):
+def api_get_user_holdings(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """获取用户持仓列表API"""
+    # 确保用户只能访问自己的持仓
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this resource"
+        )
     return get_user_holdings(user_id, db)
 
 # 获取用户交易记录
 @app.get("/users/{user_id}/transactions", response_model=PaginatedTransactionsResponse)
-def api_get_user_transactions(user_id: str, page: int = 1, per_page: int = 10, db: Session = Depends(get_db)):
+def api_get_user_transactions(user_id: str, page: int = 1, per_page: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """获取用户交易记录API"""
+    # 确保用户只能访问自己的交易记录
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this resource"
+        )
     return get_user_transactions(user_id, db, page, per_page)
 
 @app.post("/transactions", response_model=TransactionResponse)
-def api_create_transaction(
-    transaction_data: TransactionRequest, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+def api_create_transaction(transaction_data: TransactionCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """创建交易API"""
-    return create_transaction(transaction_data, current_user.id, db)
+    # 从当前认证用户获取user_id，不再需要从路径参数获取
+    transaction = create_transaction(current_user.id, transaction_data, db)
+    return TransactionResponse.from_orm(transaction)
+
+@app.post("/users/{user_id}/balance/deposit")
+def api_deposit_balance(update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """充值余额API"""
+    # 从当前认证用户获取user_id，不再需要从路径参数获取
+    new_balance = update_balance(current_user.id, update_data, "deposit", db)
+    return {"balance": new_balance}
+
+@app.post("/users/{user_id}/balance/withdraw")
+def api_withdraw_balance(update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """提现余额API"""
+    # 从当前认证用户获取user_id，不再需要从路径参数获取
+    new_balance = update_balance(current_user.id, update_data, "withdraw", db)
+    return {"balance": new_balance}
+
+# 获取用户持仓
+@app.get("/users/{user_id}/holdings", response_model=list[HoldingResponse])
+def api_get_user_holdings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """获取用户持仓列表API"""
+    # 从当前认证用户获取user_id，不再需要从路径参数获取
+    return get_user_holdings(current_user.id, db)
+
+# 获取用户交易记录
+@app.get("/users/{user_id}/transactions", response_model=PaginatedTransactionsResponse)
+def api_get_user_transactions(page: int = 1, per_page: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """获取用户交易记录API"""
+    # 从当前认证用户获取user_id，不再需要从路径参数获取
+    return get_user_transactions(current_user.id, db, page, per_page)
