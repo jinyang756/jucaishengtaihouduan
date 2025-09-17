@@ -53,9 +53,24 @@
 ### 3. 配置项目设置
 
 1. 在"Configure Project"页面，保留默认的构建设置
-2. 展开"Environment Variables"部分
-3. 添加上述所有必要的环境变量
+2. **配置Edge Config（推荐）**：
+   - 在Vercel控制台中，点击左侧菜单栏的 "Storage"
+   - 点击 "Edge Config" 部分的 "Create Edge Config" 按钮
+   - 输入名称（如 `jucaishengtai`）并点击 "Create"
+   - 在创建的Edge Config中，点击 "Add Item" 按钮添加以下数据库配置项：
+     - `DB_HOST`: 您的数据库主机地址
+     - `DB_PORT`: 数据库端口（通常为 3306）
+     - `DB_USER`: 数据库用户名
+     - `DB_PASSWORD`: 数据库密码
+     - `DB_NAME`: 数据库名称（green_ecology_fund）
+   - 点击 "Connect to Project"，选择您的项目，并在高级选项中确保环境变量名称为 `EDGE_CONFIG`
+3. **或配置环境变量**：
+   - 展开"Environment Variables"部分
+   - 添加上述所有必要的环境变量
 4. 点击"Deploy"按钮开始部署
+   - Vercel会自动执行以下命令：
+     - 安装命令：`npm run install`（会执行 `pip install -r api/requirements.txt` 安装Python依赖）
+     - 构建命令：`npm run build`（FastAPI应用不需要特殊构建步骤）
 
 ### 4. 完成部署
 

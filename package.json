@@ -4,10 +4,13 @@
   "description": "绿色生态基金虚拟净值模拟系统后端",
   "scripts": {
     "dev": "python -m api.index",
-    "start": "python -m api.index"
+    "start": "python -m api.index",
+    "install": "pip install -r api/requirements.txt",
+    "build": "echo 'No build step needed for Python FastAPI app'"
   },
   "engines": {
-    "node": ">=14.x"
+    "node": ">=14.x",
+    "python": "3.9.x"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

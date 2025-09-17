@@ -19,3 +19,5 @@ python-dotenv>=1.0.0
 # 其他必要依赖
 humanize>=4.0.0
 dateparser>=1.1.0
+# Vercel Edge Config支持
+vercel-edge-config>=0.2.0
