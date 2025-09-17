@@ -87,6 +87,9 @@
 - 基金数据测试：`https://your-project.vercel.app/api/funds`
 - API文档：`https://your-project.vercel.app/docs`
 - WebSocket测试：可以使用WebSocket客户端连接到`wss://your-project.vercel.app/api/ws/your-client-id`
+- Edge Config测试：`https://your-project.vercel.app/welcome`（测试Edge Config集成，返回问候语配置）
+
+根据部署截图，您的项目已经成功部署到Vercel平台，访问地址为：`https://jucaishengtaihouduan.vercel.app`
 
 ## 开发环境运行
 

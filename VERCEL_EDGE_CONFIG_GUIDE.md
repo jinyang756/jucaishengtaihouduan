@@ -51,30 +51,35 @@ Digest为：`5bf6b008a9ec05f6870c476d10b53211797aa000f95aae344ae60f9b422286da`
 
 ## 步骤4：验证配置是否生效
 
-要验证Edge Config是否正常工作，您可以在项目中添加一个简单的测试端点来检查配置：
+项目中已经实现了一个测试端点来验证Edge Config是否正常工作：
 
 ```python
-# 在api/index.py中添加测试端点
-@app.get("/api/edge-config-test")
-async def test_edge_config():
+# 已在api/index.py中实现的测试端点
+@app.get("/welcome")
+async def get_welcome_message():
     try:
-        # 尝试从Edge Config获取数据库配置
-        db_config = await get_db_config_from_edge()
-        # 注意：不要在响应中返回敏感信息
-        return {
-            "success": True,
-            "has_config": bool(db_config),
-            "message": "Edge Config is working properly"
-        }
+        # 初始化EdgeConfig客户端
+        edge_config = EdgeConfig()
+        
+        # 从Edge Config获取问候语配置
+        greeting = await edge_config.get("greeting")
+        
+        # 如果配置存在，返回配置的问候语；否则返回默认问候语
+        if greeting:
+            return JSONResponse(content=greeting)
+        else:
+            return JSONResponse(content={"message": "Welcome to the Green Ecology Fund API!"})
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Failed to access Edge Config"
-        }
+        logger.error(f"Error retrieving greeting from Edge Config: {e}")
+        return JSONResponse(
+            content={"error": "Failed to retrieve greeting", "details": str(e)},
+            status_code=500
+        )
 ```
 
-部署后，访问 `/api/edge-config-test` 端点来检查配置是否生效。
+部署后，访问 `/welcome` 端点来检查配置是否生效。如果Edge Config中配置了`greeting`值，将返回该配置；否则返回默认问候语。
+
+根据部署截图，您的项目已经成功部署到Vercel平台，访问地址为：`https://jucaishengtaihouduan.vercel.app`
 
 ## 步骤5：更新现有配置
 
