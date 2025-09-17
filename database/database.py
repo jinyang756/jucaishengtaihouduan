@@ -7,21 +7,17 @@ import asyncio
 # 基础模型类
 Base = declarative_base()
 
-# 尝试导入Edge Config模块
+# 尝试导入项目中自定义的Edge Config模块
 edge_config_available = False
+edge_config_client = None
 try:
-    # Vercel Edge Config的标准导入方式
-    import vercel_edge_config
+    # 尝试从项目中导入自定义的EdgeConfig类
+    from api.vercel_edge_config import EdgeConfig
     edge_config_available = True
-
+    edge_config_client = EdgeConfig()
 except ImportError:
-    # 尝试备选导入方式
-    try:
-        from edge_config import get as get_edge_config
-        edge_config_available = True
-    except ImportError:
-        # 如果无法导入edge_config，使用环境变量或默认值
-        pass
+    # 如果无法导入自定义的EdgeConfig，使用环境变量或默认值
+    pass
 
 # 默认数据库连接配置
 DEFAULT_DB_CONFIG = {
@@ -55,26 +51,18 @@ def get_database_url():
 async def get_db_config_from_edge():
     """从Vercel Edge Config异步获取数据库配置"""
     try:
-        # 检查是否使用vercel_edge_config模块
-        if 'vercel_edge_config' in globals():
-            # 使用vercel_edge_config模块获取配置
-            edge_config = vercel_edge_config.Config()
-            db_config = {
-                "host": edge_config.get('DB_HOST') or DEFAULT_DB_CONFIG['host'],
-                "port": edge_config.get('DB_PORT') or DEFAULT_DB_CONFIG['port'],
-                "user": edge_config.get('DB_USER') or DEFAULT_DB_CONFIG['user'],
-                "password": edge_config.get('DB_PASSWORD') or DEFAULT_DB_CONFIG['password'],
-                "name": edge_config.get('DB_NAME') or DEFAULT_DB_CONFIG['name']
-            }
-        else:
-            # 使用原始的edge_config模块获取配置
-            db_config = {
-                "host": await get_edge_config('DB_HOST') or DEFAULT_DB_CONFIG['host'],
-                "port": await get_edge_config('DB_PORT') or DEFAULT_DB_CONFIG['port'],
-                "user": await get_edge_config('DB_USER') or DEFAULT_DB_CONFIG['user'],
-                "password": await get_edge_config('DB_PASSWORD') or DEFAULT_DB_CONFIG['password'],
-                "name": await get_edge_config('DB_NAME') or DEFAULT_DB_CONFIG['name']
-            }
+        global edge_config_client
+        if edge_config_client is None:
+            edge_config_client = EdgeConfig()
+            
+        # 使用项目中自定义的EdgeConfig类获取配置
+        db_config = {
+            "host": (await edge_config_client.get('DB_HOST')) or DEFAULT_DB_CONFIG['host'],
+            "port": (await edge_config_client.get('DB_PORT')) or DEFAULT_DB_CONFIG['port'],
+            "user": (await edge_config_client.get('DB_USER')) or DEFAULT_DB_CONFIG['user'],
+            "password": (await edge_config_client.get('DB_PASSWORD')) or DEFAULT_DB_CONFIG['password'],
+            "name": (await edge_config_client.get('DB_NAME')) or DEFAULT_DB_CONFIG['name']
+        }
         return db_config
     except Exception as e:
         print(f"Error getting DB config from Edge Config: {e}")

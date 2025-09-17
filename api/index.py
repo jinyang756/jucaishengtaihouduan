@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import httpx
 import os
-from vercel_edge_config import EdgeConfig
+from .vercel_edge_config import EdgeConfig
 
 # 配置日志
 logging.basicConfig(
