@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 import httpx
 import os
+from vercel_edge_config import EdgeConfig
 
 # 配置日志
 logging.basicConfig(
@@ -82,6 +83,29 @@ async def health_check():
 async def get_funds():
     # 在实际部署中，这里应该连接数据库获取真实数据
     return {"funds": [], "message": "Serverless API is working"}
+
+# Welcome路由 - 使用Edge Config获取问候语
+@app.get("/welcome")
+async def get_welcome_message():
+    """从Edge Config获取问候语配置并返回"""
+    try:
+        # 初始化EdgeConfig客户端
+        edge_config = EdgeConfig()
+        
+        # 从Edge Config获取问候语配置
+        greeting = await edge_config.get("greeting")
+        
+        # 如果配置存在，返回配置的问候语；否则返回默认问候语
+        if greeting:
+            return JSONResponse(content=greeting)
+        else:
+            return JSONResponse(content={"message": "Welcome to the Green Ecology Fund API!"})
+    except Exception as e:
+        logger.error(f"Error retrieving greeting from Edge Config: {e}")
+        return JSONResponse(
+            content={"error": "Failed to retrieve greeting", "details": str(e)},
+            status_code=500
+        )
 
 # WebSocket连接管理器
 class ConnectionManager:

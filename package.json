@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "python -m api.index",
     "start": "python -m api.index",
-    "install": "pip install -r api/requirements.txt",
+    "pip-install": "pip install -r api/requirements.txt",
     "build": "echo 'No build step needed for Python FastAPI app'"
   },
   "engines": {
@@ -13,6 +13,7 @@
     "python": "3.9.x"
   },
   "dependencies": {
+    "@vercel/edge-config": "^1.4.0",
     "dotenv": "^16.4.5"
   }
 }
