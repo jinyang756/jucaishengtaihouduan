@@ -3,17 +3,26 @@
 ## 项目介绍
 聚财生态基金系统是一个基于微服务架构的智能基金管理系统，能够根据新闻事件和市场规则自动计算基金净值，提供实时的基金管理和投资决策支持。
 
+系统支持虚拟净值模拟、新闻事件影响分析、规则化投资决策等功能，并通过Vercel Edge Config进行安全高效的配置管理。
+
 ## 系统架构
 本系统采用微服务架构，由以下几个核心服务组成：
-- **API网关服务**：作为系统的入口点，负责请求路由、负载均衡和安全认证
+- **API服务**：作为系统的主要入口点，提供REST API接口
+- **API网关服务**：负责请求路由、负载均衡和安全认证
 - **规则服务**：管理基金计算规则的配置和更新
 - **新闻服务**：采集、分析和处理与基金相关的新闻信息
 - **计算服务**：根据规则和新闻计算基金净值
 - **基金服务**：管理基金的基本信息和净值历史数据
+- **用户服务**：管理用户账户、认证和授权
 - **公共服务**：提供共享的缓存等功能
+- **配置管理**：基于Vercel Edge Config的配置管理系统
 
 ## 目录结构
 ```
+├── api/                # API服务（主要入口点）
+│   ├── index.py        # API主程序
+│   ├── vercel_edge_config.py # Vercel Edge Config客户端
+│   └── requirements.txt # API服务依赖
 ├── api_gateway/        # API网关服务
 │   ├── __init__.py
 │   └── app.py          # API网关主程序
@@ -43,13 +52,26 @@
 │   ├── models.py       # 数据模型
 │   ├── schemas.py      # 请求/响应模型
 │   └── service.py      # 服务实现
-├── database/           # 数据库初始化脚本
+├── user_service/       # 用户服务
+│   ├── __init__.py
+│   ├── main.py         # 用户服务主程序
+│   ├── models.py       # 数据模型
+│   ├── schemas.py      # 请求/响应模型
+│   └── service.py      # 服务实现
+├── database/           # 数据库相关文件
+│   ├── __init__.py
+│   ├── database.py     # 数据库连接配置
 │   └── init.sql        # 数据库初始化SQL
 ├── .env.example        # 环境变量示例
+├── .gitignore          # Git忽略规则
+├── DEPLOYMENT_GUIDE.md # 部署指南
 ├── Dockerfile          # Docker构建文件
 ├── docker-compose.yml  # Docker Compose配置
-├── requirements.txt    # Python依赖
-└── README.md           # 项目说明文档
+├── EDGE_CONFIG_README.md # Edge Config配置文档
+├── README.md           # 项目说明文档
+├── comprehensive_test.py # 全面测试脚本
+├── requirements.txt    # Python项目依赖
+└── vercel.json         # Vercel部署配置
 ```
 
 ## 技术栈
@@ -61,6 +83,9 @@
 - **ORM**：SQLAlchemy
 - **数据验证**：Pydantic
 - **API文档**：Swagger UI (自动生成)
+- **配置管理**：Vercel Edge Config
+- **环境变量管理**：python-dotenv
+- **部署平台**：Vercel (支持)
 
 ## 快速开始
 
