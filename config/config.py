@@ -24,7 +24,7 @@ class DatabaseConfig:
     
     @property
     def URL(self):
-        return f"mysql+mysqlconnector://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/{self.NAME}"
+        return f"mariadb+mariadbconnector://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/{self.NAME}?charset=utf8mb4"
 
 # 异步获取Edge Config中的数据库配置
 try:
@@ -119,6 +119,17 @@ class CrawlerConfig:
         "green_energy": "https://www.irena.org/news"
     }
 
+# 用户服务配置
+class UserConfig:
+    # 交易限额配置
+    # 注意：根据需求，这里设置了默认限额但实际功能支持"交易不限额"
+    MAX_SINGLE_TRANSACTION_AMOUNT = float(os.environ.get("MAX_SINGLE_TRANSACTION_AMOUNT", "1000000.0"))  # 单笔交易最大金额，默认100万元
+    MAX_DAILY_TRANSACTION_AMOUNT = float(os.environ.get("MAX_DAILY_TRANSACTION_AMOUNT", "5000000.0"))  # 每日交易最大金额，默认500万元
+    MAX_DAILY_TRANSACTION_COUNT = int(os.environ.get("MAX_DAILY_TRANSACTION_COUNT", "100"))  # 每日最大交易笔数
+    
+    # 交易限额开关
+    ENABLE_TRANSACTION_LIMITS = os.environ.get("ENABLE_TRANSACTION_LIMITS", "False").lower() == "true"  # 默认关闭限额
+
 # 计算服务配置
 class CalculationConfig:
     # 净值计算配置
@@ -140,6 +151,7 @@ class Config:
     logs = LogConfig()
     crawler = CrawlerConfig()
     calculation = CalculationConfig()
+    user = UserConfig()
 
 # 创建全局配置实例
 config = Config()

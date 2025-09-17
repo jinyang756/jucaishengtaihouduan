@@ -1,7 +1,24 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
 from typing import Optional, List
+from pydantic import BaseModel, Field, validator, EmailStr
+from enum import Enum
 from .models import UserStatus, UserType
+
+class TransactionType(str, Enum):
+    BUY = "buy"
+    SELL = "sell"
+
+class TransactionCreateRequest(BaseModel):
+    fund_id: str
+    shares: float = Field(..., gt=0)
+    transaction_type: TransactionType
+
+    @validator('shares')
+    def validate_shares(cls, v):
+        if v <= 0:
+            raise ValueError("Shares must be greater than 0")
+        return v
 
 # 用户注册请求模型
 class UserRegisterRequest(BaseModel):
@@ -49,18 +66,15 @@ class BalanceUpdateRequest(BaseModel):
 
 # 持仓响应模型
 class HoldingResponse(BaseModel):
-    id: str
-    user_id: str
     fund_id: str
+    fund_code: str
+    fund_name: str
     shares: float
-    purchase_cost: float
-    current_value: float
+    purchase_price: float
+    current_nav: float
+    market_value: float
     profit_loss: float
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        orm_mode = True
+    profit_loss_rate: float
 
 # 交易请求模型
 class TransactionRequest(BaseModel):

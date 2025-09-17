@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Float, DateTime, Boolean, JSON, Enum
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Float, DateTime, Enum, JSON
 from datetime import datetime
 from database.database import Base
 import enum

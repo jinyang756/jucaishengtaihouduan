@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Float, DateTime, Boolean, Enum, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Float, DateTime, Enum, Boolean
 from datetime import datetime
 from database.database import Base
 import enum
@@ -40,6 +40,7 @@ class UserHolding(Base):
     user_id = Column(String(36), index=True, nullable=False)
     fund_id = Column(String(36), index=True, nullable=False)
     shares = Column(Float, default=0.0)
+    purchase_price = Column(Float, default=0.0)
     purchase_cost = Column(Float, default=0.0)
     current_value = Column(Float, default=0.0)
     profit_loss = Column(Float, default=0.0)
@@ -57,10 +58,12 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     shares = Column(Float)
     unit_price = Column(Float)
+    transaction_price = Column(Float)
     fee = Column(Float, default=0.0)
     net_amount = Column(Float)
     status = Column(String(20), default="pending")  # pending, completed, failed
     transaction_mode = Column(String(20))  # one-time, regular, profit_taking, stop_loss
+    transaction_date = Column(DateTime, default=datetime.utcnow)
     scheduled_date = Column(DateTime)  # 用于定期定额等交易模式
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

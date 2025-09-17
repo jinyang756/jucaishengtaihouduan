@@ -28,7 +28,7 @@
 
 | 环境变量 | 说明 | 示例值 |
 |---------|------|-------|
-| `DATABASE_URL` | 数据库连接URL | `mysql+pymysql://username:password@host:port/database_name` |
+| `DATABASE_URL` | 数据库连接URL | `mariadb+mariadbconnector://username:password@host:port/database_name` |
 | `FRONTEND_URL` | 前端应用URL | `https://your-frontend.vercel.app` |
 | `SECRET_KEY` | 安全密钥（用于JWT等） | `your-secret-key` |
 | `DB_HOST` | 数据库主机（可选，如不使用DATABASE_URL） | `db.example.com` |

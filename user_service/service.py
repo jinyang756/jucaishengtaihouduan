@@ -3,10 +3,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .models import User, UserHolding, Transaction, UserStatus
+from fund_service.models import Fund
 from .schemas import (
     UserRegisterRequest, UserLoginRequest, UserResponse, 
     UserUpdateRequest, BalanceUpdateRequest, HoldingResponse,
-    TransactionRequest, TransactionResponse, PaginatedTransactionsResponse
+    TransactionRequest, TransactionResponse, PaginatedTransactionsResponse,
+    TransactionCreateRequest
 )
 from database.database import get_db
 from common.cache import cache
@@ -15,11 +17,15 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 import secrets
+import os
 from starlette import status
 # 添加passlib和bcrypt用于密码哈希
 from passlib.context import CryptContext
 import re
 import logging
+
+# 导入配置
+from config.config import config
 
 # 配置日志
 logger = logging.getLogger("user_service")
@@ -255,6 +261,7 @@ def create_transaction(user_id: str, transaction_data: TransactionCreateRequest,
     """
     创建交易记录
     使用事务确保数据一致性
+    包含交易限额检查
     """
     try:
         # 开始事务
@@ -269,7 +276,44 @@ def create_transaction(user_id: str, transaction_data: TransactionCreateRequest,
             raise HTTPException(status_code=404, detail="Fund not found")
         
         # 计算交易金额
-        transaction_amount = transaction_data.shares * fund.nav
+        transaction_amount = transaction_data.shares * fund.latest_nav
+        
+        # 交易限额检查
+        if config.user.ENABLE_TRANSACTION_LIMITS:
+            # 获取当日开始时间
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # 单笔交易限额检查
+            if transaction_amount > config.user.MAX_SINGLE_TRANSACTION_AMOUNT:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Single transaction amount exceeds limit: {config.user.MAX_SINGLE_TRANSACTION_AMOUNT}"
+                )
+            
+            # 查询当日已发生的交易
+            today_transactions = db.query(Transaction).filter(
+                Transaction.user_id == user_id,
+                Transaction.transaction_date >= today_start,
+                Transaction.status == "completed"
+            ).all()
+            
+            # 计算当日累计交易金额和交易笔数
+            daily_transaction_amount = sum(t.amount for t in today_transactions)
+            daily_transaction_count = len(today_transactions)
+            
+            # 每日交易金额限额检查
+            if daily_transaction_amount + transaction_amount > config.user.MAX_DAILY_TRANSACTION_AMOUNT:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Daily transaction amount exceeds limit: {config.user.MAX_DAILY_TRANSACTION_AMOUNT}"
+                )
+            
+            # 每日交易笔数限额检查
+            if daily_transaction_count >= config.user.MAX_DAILY_TRANSACTION_COUNT:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Daily transaction count exceeds limit: {config.user.MAX_DAILY_TRANSACTION_COUNT}"
+                )
         
         # 根据交易类型执行不同的逻辑
         if transaction_data.transaction_type == "buy":
@@ -294,7 +338,7 @@ def create_transaction(user_id: str, transaction_data: TransactionCreateRequest,
                     user_id=user_id,
                     fund_id=transaction_data.fund_id,
                     shares=transaction_data.shares,
-                    purchase_price=fund.nav
+                    purchase_price=fund.latest_nav
                 )
                 db.add(holding)
         elif transaction_data.transaction_type == "sell":
@@ -324,10 +368,15 @@ def create_transaction(user_id: str, transaction_data: TransactionCreateRequest,
             user_id=user_id,
             fund_id=transaction_data.fund_id,
             shares=transaction_data.shares,
-            transaction_price=fund.nav,
+            transaction_price=fund.latest_nav,
             transaction_type=transaction_data.transaction_type,
-            transaction_date=datetime.datetime.now(),
-            status="completed"
+            transaction_date=datetime.now(),
+            status="completed",
+            amount=transaction_amount,  # 添加amount字段
+            transaction_mode="one-time",  # 添加transaction_mode字段
+            fee=0.0,  # 添加fee字段，默认为0
+            unit_price=fund.latest_nav,  # 添加unit_price字段
+            net_amount=transaction_amount  # 添加net_amount字段
         )
         db.add(transaction)
         
@@ -387,6 +436,41 @@ def api_register_user(user_data: UserRegisterRequest, db: Session = Depends(get_
     """用户注册API"""
     return register_user(user_data, db)
 
+@app.post("/setup_test_user", response_model=UserResponse)
+def setup_test_user(db: Session = Depends(get_db)):
+    """创建测试用户，便于前端开发和测试"""
+    test_username = "testuser"
+    test_email = "test@example.com"
+    test_password = "Test123456"
+    
+    # 检查测试用户是否已存在
+    existing_user = db.query(User).filter(User.username == test_username).first()
+    if existing_user:
+        return UserResponse.from_orm(existing_user)
+    
+    # 创建测试用户
+    hashed_password = hash_password(test_password)
+    db_user = User(
+        id=str(uuid.uuid4()),
+        username=test_username,
+        email=test_email,
+        password_hash=hashed_password,
+        phone=None,
+        balance=10000.0,  # 初始余额10000元用于测试
+        status=UserStatus.ACTIVE,
+        user_type=UserType.INDIVIDUAL,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        last_login_at=None,
+        is_verified=False
+    )
+    
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return UserResponse.from_orm(db_user)
+
 @app.post("/users/login")
 def api_login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)):
     """用户登录API"""
@@ -414,54 +498,6 @@ def api_update_user(user_id: str, update_data: UserUpdateRequest, db: Session = 
         )
     return update_user(user_id, update_data, db)
 
-@app.post("/users/{user_id}/balance/deposit")
-def api_deposit_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """充值余额API"""
-    # 确保用户只能操作自己的账户
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    new_balance = update_balance(user_id, update_data, "deposit", db)
-    return {"balance": new_balance}
-
-@app.post("/users/{user_id}/balance/withdraw")
-def api_withdraw_balance(user_id: str, update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """提现余额API"""
-    # 确保用户只能操作自己的账户
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    new_balance = update_balance(user_id, update_data, "withdraw", db)
-    return {"balance": new_balance}
-
-# 获取用户持仓
-@app.get("/users/{user_id}/holdings", response_model=list[HoldingResponse])
-def api_get_user_holdings(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """获取用户持仓列表API"""
-    # 确保用户只能访问自己的持仓
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    return get_user_holdings(user_id, db)
-
-# 获取用户交易记录
-@app.get("/users/{user_id}/transactions", response_model=PaginatedTransactionsResponse)
-def api_get_user_transactions(user_id: str, page: int = 1, per_page: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """获取用户交易记录API"""
-    # 确保用户只能访问自己的交易记录
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    return get_user_transactions(user_id, db, page, per_page)
-
 @app.post("/transactions", response_model=TransactionResponse)
 def api_create_transaction(transaction_data: TransactionCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """创建交易API"""
@@ -469,14 +505,14 @@ def api_create_transaction(transaction_data: TransactionCreateRequest, db: Sessi
     transaction = create_transaction(current_user.id, transaction_data, db)
     return TransactionResponse.from_orm(transaction)
 
-@app.post("/users/{user_id}/balance/deposit")
+@app.post("/users/balance/deposit")
 def api_deposit_balance(update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """充值余额API"""
     # 从当前认证用户获取user_id，不再需要从路径参数获取
     new_balance = update_balance(current_user.id, update_data, "deposit", db)
     return {"balance": new_balance}
 
-@app.post("/users/{user_id}/balance/withdraw")
+@app.post("/users/balance/withdraw")
 def api_withdraw_balance(update_data: BalanceUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """提现余额API"""
     # 从当前认证用户获取user_id，不再需要从路径参数获取
@@ -484,15 +520,196 @@ def api_withdraw_balance(update_data: BalanceUpdateRequest, db: Session = Depend
     return {"balance": new_balance}
 
 # 获取用户持仓
-@app.get("/users/{user_id}/holdings", response_model=list[HoldingResponse])
+@app.get("/users/holdings", response_model=list[HoldingResponse])
 def api_get_user_holdings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """获取用户持仓列表API"""
     # 从当前认证用户获取user_id，不再需要从路径参数获取
     return get_user_holdings(current_user.id, db)
 
 # 获取用户交易记录
-@app.get("/users/{user_id}/transactions", response_model=PaginatedTransactionsResponse)
+@app.get("/users/transactions", response_model=PaginatedTransactionsResponse)
 def api_get_user_transactions(page: int = 1, per_page: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """获取用户交易记录API"""
     # 从当前认证用户获取user_id，不再需要从路径参数获取
     return get_user_transactions(current_user.id, db, page, per_page)
+
+# 获取用户持仓信息
+def get_user_holdings(user_id: str, db: Session):
+    """
+    获取用户的基金持仓信息
+    
+    参数:
+    - user_id: 用户ID
+    - db: 数据库会话
+    
+    返回:
+    - 用户持仓列表
+    """
+    try:
+        # 检查用户是否存在
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # 查询用户持仓
+        holdings = db.query(UserHolding).filter(UserHolding.user_id == user_id).all()
+        
+        # 构建持仓响应列表
+        holding_responses = []
+        for holding in holdings:
+            # 获取对应的基金信息
+            fund = db.query(Fund).filter(Fund.id == holding.fund_id).first()
+            if fund:
+                # 计算持仓市值
+                market_value = holding.shares * fund.latest_nav
+                
+                # 计算盈亏
+                profit_loss = (fund.latest_nav - holding.purchase_price) * holding.shares
+                profit_loss_rate = ((fund.latest_nav - holding.purchase_price) / holding.purchase_price) * 100 if holding.purchase_price > 0 else 0
+                
+                holding_responses.append({
+                    "fund_id": holding.fund_id,
+                    "fund_code": fund.code,
+                    "fund_name": fund.name,
+                    "shares": holding.shares,
+                    "purchase_price": holding.purchase_price,
+                    "current_nav": fund.latest_nav,
+                    "market_value": market_value,
+                    "profit_loss": profit_loss,
+                    "profit_loss_rate": profit_loss_rate
+                })
+        
+        # 如果没有持仓数据，返回模拟数据以便前端开发
+        if not holding_responses:
+            return [
+                {
+                    "fund_id": "mock_fund_1",
+                    "fund_code": "000001",
+                    "fund_name": "绿色能源主题基金",
+                    "shares": 1000.0,
+                    "purchase_price": 1.5,
+                    "current_nav": 1.65,
+                    "market_value": 1650.0,
+                    "profit_loss": 150.0,
+                    "profit_loss_rate": 10.0
+                },
+                {
+                    "fund_id": "mock_fund_2",
+                    "fund_code": "000002",
+                    "fund_name": "环保ETF联接",
+                    "shares": 500.0,
+                    "purchase_price": 2.2,
+                    "current_nav": 2.15,
+                    "market_value": 1075.0,
+                    "profit_loss": -25.0,
+                    "profit_loss_rate": -2.27
+                }
+            ]
+        
+        return holding_responses
+    except Exception as e:
+        # 处理异常
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to get user holdings: {str(e)}")
+
+# 获取用户交易记录
+def get_user_transactions(user_id: str, db: Session, page: int = 1, per_page: int = 10):
+    """
+    获取用户的交易记录，支持分页
+    
+    参数:
+    - user_id: 用户ID
+    - db: 数据库会话
+    - page: 当前页码，默认为1
+    - per_page: 每页记录数，默认为10
+    
+    返回:
+    - 分页的交易记录列表
+    """
+    try:
+        # 检查用户是否存在
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # 计算偏移量
+        offset = (page - 1) * per_page
+        
+        # 查询总记录数
+        total = db.query(Transaction).filter(Transaction.user_id == user_id).count()
+        
+        # 查询分页的交易记录，按交易日期降序排序
+        transactions = db.query(Transaction).filter(Transaction.user_id == user_id)
+        transactions = transactions.order_by(Transaction.transaction_date.desc())
+        transactions = transactions.offset(offset).limit(per_page).all()
+        
+        # 构建交易记录响应列表
+        transaction_responses = []
+        for transaction in transactions:
+            # 获取对应的基金信息
+            fund = db.query(Fund).filter(Fund.id == transaction.fund_id).first()
+            
+            transaction_responses.append({
+                "id": transaction.id,
+                "fund_id": transaction.fund_id,
+                "fund_code": fund.code if fund else None,
+                "fund_name": fund.name if fund else None,
+                "shares": transaction.shares,
+                "transaction_price": transaction.transaction_price,
+                "transaction_type": transaction.transaction_type,
+                "transaction_date": transaction.transaction_date,
+                "status": transaction.status,
+                "amount": transaction.shares * transaction.transaction_price
+            })
+        
+        # 如果没有交易记录，返回模拟数据以便前端开发
+        if not transaction_responses and page == 1:
+            mock_transactions = [
+                {
+                    "id": "mock_trans_1",
+                    "fund_id": "mock_fund_1",
+                    "fund_code": "000001",
+                    "fund_name": "绿色能源主题基金",
+                    "shares": 1000.0,
+                    "transaction_price": 1.5,
+                    "transaction_type": "buy",
+                    "transaction_date": datetime.now() - timedelta(days=5),
+                    "status": "completed",
+                    "amount": 1500.0
+                },
+                {
+                    "id": "mock_trans_2",
+                    "fund_id": "mock_fund_2",
+                    "fund_code": "000002",
+                    "fund_name": "环保ETF联接",
+                    "shares": 500.0,
+                    "transaction_price": 2.2,
+                    "transaction_type": "buy",
+                    "transaction_date": datetime.now() - timedelta(days=10),
+                    "status": "completed",
+                    "amount": 1100.0
+                }
+            ]
+            
+            return {
+                "transactions": mock_transactions,
+                "page": page,
+                "per_page": per_page,
+                "total": 2,
+                "total_pages": 1
+            }
+        
+        # 构建分页响应
+        return {
+            "transactions": transaction_responses,
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": (total + per_page - 1) // per_page
+        }
+    except Exception as e:
+        # 处理异常
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to get user transactions: {str(e)}")
