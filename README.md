@@ -3,7 +3,7 @@
 ## 项目介绍
 聚财生态基金系统是一个基于微服务架构的智能基金管理系统，能够根据新闻事件和市场规则自动计算基金净值，提供实时的基金管理和投资决策支持。
 
-系统支持虚拟净值模拟、新闻事件影响分析、规则化投资决策等功能，并通过Vercel Edge Config进行安全高效的配置管理。
+系统支持虚拟净值模拟、新闻事件影响分析、规则化投资决策、用户交易管理等功能，并通过Vercel Edge Config进行安全高效的配置管理。系统还实现了灵活的交易限额机制，可配置单笔交易金额限制、每日累计交易金额限制和每日交易笔数限制。
 
 ## 系统架构
 本系统采用微服务架构，由以下几个核心服务组成：
@@ -168,6 +168,17 @@
 - POST /funds/{fund_id}/nav - 添加基金净值
 - GET /funds/{fund_id}/performance - 获取基金绩效
 
+#### 用户服务
+- POST /register - 用户注册
+- POST /login - 用户登录
+- GET /users/me - 获取当前用户信息
+- GET /users/balance - 查询用户余额
+- POST /users/balance/deposit - 存款
+- POST /users/balance/withdraw - 提现
+- POST /transactions - 创建交易（买入/卖出基金）
+- GET /users/holdings - 查询用户持仓
+- GET /users/transactions - 查询用户交易记录
+
 ## 配置说明
 所有配置通过环境变量或.env文件设置，主要配置项包括：
 - 数据库连接信息
@@ -176,6 +187,7 @@
 - 微服务URL
 - 爬虫配置
 - 计算参数配置
+- 交易限额配置（单笔交易金额、每日累计金额、每日交易笔数）
 
 ## 监控与日志
 - 服务指标通过Prometheus收集，Grafana可视化展示
