@@ -45,7 +45,8 @@ SERVICES = {
     "rule_service": os.environ.get("RULE_SERVICE_URL", "http://localhost:8000"),
     "news_service": os.environ.get("NEWS_SERVICE_URL", "http://localhost:8001"),
     "calculation_service": os.environ.get("CALCULATION_SERVICE_URL", "http://localhost:8002"),
-    "fund_service": os.environ.get("FUND_SERVICE_URL", "http://localhost:8003")
+    "fund_service": os.environ.get("FUND_SERVICE_URL", "http://localhost:8003"),
+    "user_service": os.environ.get("USER_SERVICE_URL", "http://localhost:8004")
 }
 
 # 请求/响应日志中间件
@@ -143,6 +144,11 @@ async def proxy_to_calculation_service(request: Request, path: str):
 async def proxy_to_fund_service(request: Request, path: str):
     """代理请求到基金服务"""
     return await proxy_request(request, "fund_service", path)
+
+@app.api_route("/api/user_service/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def proxy_to_user_service(request: Request, path: str):
+    """代理请求到用户服务"""
+    return await proxy_request(request, "user_service", path)
 
 # 代理请求的核心实现
 async def proxy_request(request: Request, service_name: str, path: str):
