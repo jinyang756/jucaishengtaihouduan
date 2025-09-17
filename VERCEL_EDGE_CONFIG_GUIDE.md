@@ -16,8 +16,12 @@ Edge Config是Vercel提供的边缘配置存储服务，相比传统环境变量
 1. 登录Vercel控制台，选择您的项目
 2. 点击左侧菜单栏的 **Storage**
 3. 在 **Edge Config** 部分，点击 **Create Edge Config** 按钮
-4. 输入名称（推荐使用与项目相关的名称，如 `jucaishengtai`）
+4. 输入名称（使用您提供的名称：`jucaishengtai`）
 5. 点击 **Create** 按钮创建Edge Config
+
+**注意：** 您的Edge Config ID为：`ecfg_xfrfdjmkzodtkhqy4c8jhs0loyed`
+令牌为：`d5ba143a-2429-433b-a2cb-7f75161bd918`
+Digest为：`5bf6b008a9ec05f6870c476d10b53211797aa000f95aae344ae60f9b422286da`
 
 ## 步骤2：添加数据库配置项
 

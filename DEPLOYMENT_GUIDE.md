@@ -54,16 +54,19 @@
 
 1. 在"Configure Project"页面，保留默认的构建设置
 2. **配置Edge Config（推荐）**：
-   - 在Vercel控制台中，点击左侧菜单栏的 "Storage"
-   - 点击 "Edge Config" 部分的 "Create Edge Config" 按钮
-   - 输入名称（如 `jucaishengtai`）并点击 "Create"
-   - 在创建的Edge Config中，点击 "Add Item" 按钮添加以下数据库配置项：
+     - 在Vercel控制台中，点击左侧菜单栏的 "Storage"
+   - 点击 "Edge Config" 部分，找到已创建的名为 `jucaishengtai` 的配置
+   - 在该Edge Config中，点击 "Add Item" 按钮添加以下数据库配置项：
      - `DB_HOST`: 您的数据库主机地址
      - `DB_PORT`: 数据库端口（通常为 3306）
      - `DB_USER`: 数据库用户名
      - `DB_PASSWORD`: 数据库密码
      - `DB_NAME`: 数据库名称（green_ecology_fund）
    - 点击 "Connect to Project"，选择您的项目，并在高级选项中确保环境变量名称为 `EDGE_CONFIG`
+   
+   **注意：** 您的Edge Config ID为：`ecfg_xfrfdjmkzodtkhqy4c8jhs0loyed`
+   令牌为：`d5ba143a-2429-433b-a2cb-7f75161bd918`
+   Digest为：`5bf6b008a9ec05f6870c476d10b53211797aa000f95aae344ae60f9b422286da`
 3. **或配置环境变量**：
    - 展开"Environment Variables"部分
    - 添加上述所有必要的环境变量
