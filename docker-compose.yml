@@ -1,0 +1,202 @@
+version: '3.8'
+
+services:
+  # API网关服务
+  api_gateway:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rule_service
+      - news_service
+      - calculation_service
+      - fund_service
+      - redis
+    environment:
+      - DEBUG=True
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=green_ecology_fund
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RULE_SERVICE_URL=http://rule_service:8000
+      - NEWS_SERVICE_URL=http://news_service:8001
+      - CALCULATION_SERVICE_URL=http://calculation_service:8002
+      - FUND_SERVICE_URL=http://fund_service:8003
+    volumes:
+      - .:/app
+    networks:
+      - app_network
+
+  # 规则服务
+  rule_service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python -m rule_service.service
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=green_ecology_fund
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - .:/app
+    networks:
+      - app_network
+
+  # 新闻服务
+  news_service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python -m news_service.service
+    ports:
+      - "8001:8000"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=green_ecology_fund
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - .:/app
+    networks:
+      - app_network
+
+  # 计算服务
+  calculation_service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python -m calculation_service.service
+    ports:
+      - "8002:8000"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=green_ecology_fund
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEWS_SERVICE_URL=http://news_service:8000
+    volumes:
+      - .:/app
+    networks:
+      - app_network
+
+  # 基金服务
+  fund_service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python -m fund_service.service
+    ports:
+      - "8003:8000"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=green_ecology_fund
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - .:/app
+    networks:
+      - app_network
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=green_ecology_fund
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis缓存
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus监控
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - app_network
+    depends_on:
+      - api_gateway
+
+  # Grafana可视化
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app_network
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+volumes:
+  mysql_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  app_network:
+    driver: bridge

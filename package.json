@@ -1,0 +1,15 @@
+{
+  "name": "green-ecology-fund-backend",
+  "version": "1.0.0",
+  "description": "绿色生态基金虚拟净值模拟系统后端",
+  "scripts": {
+    "dev": "python -m api.index",
+    "start": "python -m api.index"
+  },
+  "engines": {
+    "node": ">=14.x"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}
