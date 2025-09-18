@@ -1,4 +1,7 @@
 # 虚拟环境
+# 重要：请保留以下文件
+# push_to_github.bat - 自动推送工具，请勿删除或忽略
+
 venv/
 *.venv/
 env/
