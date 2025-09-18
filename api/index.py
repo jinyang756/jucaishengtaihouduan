@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 from mangum import Mangum
 import os
 from dotenv import load_dotenv
@@ -23,6 +24,72 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# 导入和集成user_service
+# 注意：由于user_service使用了独立的FastAPI应用实例，我们将创建一个新的路由来集成它
+user_service_router = APIRouter(prefix="/api/users", tags=["用户服务"])
+
+# 导入user_service的功能
+from user_service.service import (
+    register_user as user_service_register_user,
+    login_user as user_service_login_user,
+    get_user as user_service_get_user_by_id,
+    update_user as user_service_update_user,
+    update_balance as user_service_deposit_balance,
+    get_user_holdings as user_service_get_user_holdings,
+    get_user_transactions as user_service_get_user_transactions,
+    create_transaction as user_service_create_transaction
+)
+from user_service.schemas import (
+    UserRegisterRequest,
+    UserLoginRequest,
+    UserResponse,
+    UserUpdateRequest,
+    BalanceUpdateRequest,
+    HoldingResponse,
+    TransactionCreateRequest,
+    TransactionResponse,
+    PaginatedTransactionsResponse
+)
+from database.database import get_db
+from sqlalchemy.orm import Session
+from fastapi import Depends
+
+# 重新定义user_service的API路由
+@user_service_router.post("/register", response_model=UserResponse)
+def register_user_endpoint(user_data: UserRegisterRequest, db: Session = Depends(get_db)):
+    return user_service_register_user(user_data, db)
+
+@user_service_router.post("/login")
+def login_user_endpoint(login_data: UserLoginRequest, db: Session = Depends(get_db)):
+    return user_service_login_user(login_data, db)
+
+@user_service_router.get("/{user_id}", response_model=UserResponse)
+def get_user_by_id_endpoint(user_id: str, db: Session = Depends(get_db)):
+    return user_service_get_user_by_id(user_id, db)
+
+@user_service_router.put("/{user_id}", response_model=UserResponse)
+def update_user_endpoint(user_id: str, user_data: UserUpdateRequest, db: Session = Depends(get_db)):
+    return user_service_update_user(user_id, user_data, db)
+
+@user_service_router.post("/{user_id}/balance/deposit")
+def deposit_balance_endpoint(user_id: str, balance_data: BalanceUpdateRequest, db: Session = Depends(get_db)):
+    return user_service_deposit_balance(user_id, balance_data, db)
+
+@user_service_router.get("/{user_id}/holdings", response_model=List[HoldingResponse])
+def get_user_holdings_endpoint(user_id: str, db: Session = Depends(get_db)):
+    return user_service_get_user_holdings(user_id, db)
+
+@user_service_router.get("/{user_id}/transactions", response_model=PaginatedTransactionsResponse)
+def get_user_transactions_endpoint(user_id: str, page: int = 1, per_page: int = 10, db: Session = Depends(get_db)):
+    return user_service_get_user_transactions(user_id, page, per_page, db)
+
+@user_service_router.post("/transactions", response_model=TransactionResponse)
+def create_transaction_endpoint(transaction_data: TransactionCreateRequest, db: Session = Depends(get_db)):
+    return user_service_create_transaction(transaction_data, db)
+
+# 将user_service路由挂载到主应用
+app.include_router(user_service_router)
 
 # 添加CORS中间件
 origins = [
@@ -89,6 +156,11 @@ def welcome():
 
 # 导出为Vercel Serverless Function
 handler = Mangum(app)
+
+# 注意：其他服务（fund_service, calculation_service, news_service, rule_service）
+# 目前保留原样，但在未来可以按照类似user_service的方式集成到主API中
+# 这种集成方式可以避免多个独立FastAPI应用实例导致的冲突
+# 同时保留了完整的user_service功能和代码结构
 
 # 本地开发环境运行时的配置
 if __name__ == "__main__":

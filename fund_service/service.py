@@ -11,12 +11,10 @@ from common.cache import redis_client
 import uuid
 from datetime import datetime, timedelta
 import json
-
-app = FastAPI()
+from fastapi import HTTPException, Depends
 
 # 基金CRUD操作
-@app.post("/funds", response_model=FundResponse)
-def create_fund(fund: FundCreate, db: Session = Depends(get_db)):
+def create_fund(fund: FundCreate, db: Session):
     """创建新基金"""
     # 检查基金代码是否已存在
     existing_fund = db.query(Fund).filter(Fund.code == fund.code).first()
@@ -115,8 +113,7 @@ def delete_fund(fund_id: str, db: Session = Depends(get_db)):
     return {"message": "Fund marked as closed"}
 
 # 基金净值操作
-@app.post("/funds/{fund_id}/net_values", response_model=FundNetValueResponse)
-def add_fund_net_value(fund_id: str, net_value: FundNetValueCreate, db: Session = Depends(get_db)):
+def add_fund_net_value(fund_id: str, net_value: FundNetValueCreate, db: Session):
     """添加基金净值记录"""
     # 检查基金是否存在
     fund = db.query(Fund).filter(Fund.id == fund_id).first()
@@ -158,8 +155,7 @@ def add_fund_net_value(fund_id: str, net_value: FundNetValueCreate, db: Session 
     
     return db_net_value
 
-@app.get("/funds/{fund_id}/net_values/latest", response_model=FundNetValueResponse)
-def get_latest_net_value(fund_id: str, db: Session = Depends(get_db)):
+def get_latest_net_value(fund_id: str, db: Session):
     """获取基金最新净值"""
     # 先检查缓存
     cache_key = f"fund:{fund_id}:latest_nav"
@@ -179,8 +175,7 @@ def get_latest_net_value(fund_id: str, db: Session = Depends(get_db)):
     redis_client.set(cache_key, json.dumps(net_value.dict()))
     return net_value
 
-@app.get("/funds/{fund_id}/net_values")
-def get_fund_net_values(fund_id: str, start_date: datetime, end_date: datetime, db: Session = Depends(get_db)):
+def get_fund_net_values(fund_id: str, start_date: datetime, end_date: datetime, db: Session):
     """获取基金净值历史数据"""
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date must be before end date")
@@ -194,8 +189,7 @@ def get_fund_net_values(fund_id: str, start_date: datetime, end_date: datetime, 
     return net_values
 
 # 基金搜索和筛选
-@app.post("/funds/search")
-def search_funds(request: FundSearchRequest, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def search_funds(request: FundSearchRequest, db: Session, skip: int = 0, limit: int = 100):
     """搜索和筛选基金"""
     query = db.query(Fund)
     

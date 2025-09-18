@@ -1,6 +1,4 @@
 # 聚财生态基金系统 - Vercel部署版本
-# 只包含部署到Vercel所需的基本依赖
-
 # FastAPI框架
 fastapi==0.95.2
 uvicorn==0.22.0
@@ -10,6 +8,10 @@ mangum==0.17.0
 
 # 环境变量管理
 python-dotenv==1.0.0
+
+# 数据库相关依赖
+SQLAlchemy==2.0.25
+mariadb==1.1.10
 
 # 其他基本依赖
 # 使用与FastAPI 0.95.2兼容的Pydantic 1.x版本

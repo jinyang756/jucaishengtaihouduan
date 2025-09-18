@@ -14,8 +14,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import requests
 import json
-
-app = FastAPI()
+from fastapi import HTTPException, Depends
 
 # 核心计算函数
 def calculate_impact_coefficient(news_data, fund_id):
@@ -149,8 +148,7 @@ def calculate_fund_net_value(fund_id, date=None, include_news_impact=True, param
         'news_impact_count': news_impact_count
     }
 
-# API端点
-@app.post("/calculate/net_value", response_model=CalculateNetValueResponse)
+# 基金净值计算函数
 def calculate_net_value(request: CalculateNetValueRequest, db: Session = Depends(get_db)):
     """计算基金净值"""
     try:

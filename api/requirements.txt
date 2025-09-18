@@ -2,3 +2,7 @@ fastapi==0.95.2
 uvicorn==0.22.0
 mangum==0.17.0
 python-dotenv==1.0.0
+SQLAlchemy==2.0.25
+mariadb==1.1.10
+pydantic==1.10.12
+python-multipart==0.0.6

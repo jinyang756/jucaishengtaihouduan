@@ -11,8 +11,7 @@ from datetime import datetime, timedelta
 import re
 from textblob import TextBlob
 from common.cache import redis_client
-
-app = FastAPI()
+from fastapi import HTTPException, Depends
 
 # 爬虫相关函数
 def crawl_rss_feed(feed_url):
@@ -100,9 +99,8 @@ def process_news(news_item: News, db: Session):
     cache_key = f"news:{news_item.id}"
     redis_client.set(cache_key, news_item.json(), ex=3600)  # 缓存1小时
 
-# API端点
-@app.post("/news", response_model=NewsResponse)
-def create_news(news: NewsCreate, db: Session = Depends(get_db)):
+# 创建新闻函数
+def create_news(news: NewsCreate, db: Session):
     """创建新闻"""
     # 检查URL是否已存在
     existing_news = db.query(News).filter(News.url == news.url).first()
@@ -127,8 +125,7 @@ def create_news(news: NewsCreate, db: Session = Depends(get_db)):
     db.refresh(db_news)
     return db_news
 
-@app.get("/news/{news_id}", response_model=NewsResponse)
-def get_news(news_id: str, db: Session = Depends(get_db)):
+def get_news(news_id: str, db: Session):
     """获取新闻详情"""
     # 先检查缓存
     cache_key = f"news:{news_id}"
@@ -144,8 +141,7 @@ def get_news(news_id: str, db: Session = Depends(get_db)):
     redis_client.set(cache_key, news.json(), ex=3600)
     return news
 
-@app.put("/news/{news_id}", response_model=NewsResponse)
-def update_news(news_id: str, news: NewsUpdate, db: Session = Depends(get_db)):
+def update_news(news_id: str, news: NewsUpdate, db: Session):
     """更新新闻信息"""
     db_news = db.query(News).filter(News.id == news_id).first()
     if not db_news:
@@ -164,8 +160,7 @@ def update_news(news_id: str, news: NewsUpdate, db: Session = Depends(get_db)):
     
     return db_news
 
-@app.post("/news/crawl")
-def crawl_news(request: NewsCrawlRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def crawl_news(request: NewsCrawlRequest, background_tasks, db: Session):
     """批量爬取新闻"""
     for source in request.sources[:request.max_items]:
         background_tasks.add_task(_crawl_news_task, source, request.crawl_type, db)

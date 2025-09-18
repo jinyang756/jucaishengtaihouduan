@@ -4,11 +4,10 @@ from .models import Rule, RuleStatus, RuleType
 from .schemas import RuleCreate, RuleUpdate, RuleResponse
 from database.database import get_db
 import uuid
+from fastapi import HTTPException, Depends
 
-app = FastAPI()
-
-@app.post("/rules", response_model=RuleResponse)
-def create_rule(rule: RuleCreate, db: Session = Depends(get_db)):
+# 创建规则函数
+def create_rule(rule: RuleCreate, db: Session):
     """创建新规则"""
     db_rule = Rule(
         id=str(uuid.uuid4()),
@@ -26,16 +25,14 @@ def create_rule(rule: RuleCreate, db: Session = Depends(get_db)):
     db.refresh(db_rule)
     return db_rule
 
-@app.get("/rules/{rule_id}", response_model=RuleResponse)
-def get_rule(rule_id: str, db: Session = Depends(get_db)):
+def get_rule(rule_id: str, db: Session):
     """获取规则详情"""
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     return rule
 
-@app.put("/rules/{rule_id}", response_model=RuleResponse)
-def update_rule(rule_id: str, rule: RuleUpdate, db: Session = Depends(get_db)):
+def update_rule(rule_id: str, rule: RuleUpdate, db: Session):
     """更新规则信息"""
     db_rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not db_rule:
