@@ -21,9 +21,6 @@
       "maxDuration": 30
     }
   },
-  "build": {
-    "commands": [
-      "pip install -r api/requirements.txt"
-    ]
-  }
+  "installCommand": "pip install -r api/requirements.txt",
+  "buildCommand": "echo 'No build step needed for Python FastAPI app'"
 }

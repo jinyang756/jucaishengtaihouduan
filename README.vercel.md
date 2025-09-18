@@ -13,7 +13,8 @@
 
 2. **部署配置更新**
    - 更新了`vercel.json`，将入口点从`app.py`改为`api/index.py`
-   - 配置了正确的构建命令和路由规则
+   - 配置了正确的路由规则
+   - 构建命令配置从`build.commands`改为`installCommand`和`buildCommand`
    - 设置了适合的内存分配(1024MB)和执行超时(30秒)
 
 ## 本地测试方法
