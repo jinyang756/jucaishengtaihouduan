@@ -12,10 +12,17 @@
    - 添加了`api/.env.example`环境变量示例文件
 
 2. **部署配置更新**
-   - 更新了`vercel.json`，将入口点从`app.py`改为`api/index.py`
-   - 配置了正确的路由规则
-   - 构建命令配置从`build.commands`改为`installCommand`和`buildCommand`
-   - 设置了适合的内存分配(1024MB)和执行超时(30秒)
+   - 更新了`vercel.json`，将：
+     - 添加了`app.py`作为Vercel CLI的识别入口
+     - 添加了`api/index.py`作为实际运行入口
+     - 路由规则更新为指向`app.py`
+     - 构建命令配置从`build.commands`改为`installCommand`和`buildCommand`
+     - 配置了合适的函数内存(1024MB)和执行超时(30秒)
+
+3. **创建Vercel CLI兼容层**
+   - 修改了根目录的`app.py`文件，作为兼容层
+   - 它会导入`api/index.py`中的FastAPI应用
+   - 确保Vercel CLI能够正确识别入口点
 
 ## 本地测试方法
 
