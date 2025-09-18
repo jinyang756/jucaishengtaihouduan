@@ -8,7 +8,6 @@
 ## 系统架构
 本系统采用微服务架构，由以下几个核心服务组成：
 - **API服务**：作为系统的主要入口点，提供REST API接口
-- **API网关服务**：负责请求路由、负载均衡和安全认证
 - **规则服务**：管理基金计算规则的配置和更新
 - **新闻服务**：采集、分析和处理与基金相关的新闻信息
 - **计算服务**：根据规则和新闻计算基金净值
@@ -20,23 +19,24 @@
 ## 目录结构
 ```
 ├── api/                # API服务（主要入口点）
+│   ├── .env.example    # 环境变量示例
 │   ├── index.py        # API主程序
-│   ├── vercel_edge_config.py # Vercel Edge Config客户端
 │   └── requirements.txt # API服务依赖
-├── api_gateway/        # API网关服务
+├── calculation_service/ # 计算服务
 │   ├── __init__.py
-│   └── app.py          # API网关主程序
+│   ├── models.py       # 数据模型
+│   ├── schemas.py      # 请求/响应模型
+│   └── service.py      # 服务实现
 ├── common/             # 公共服务
 │   ├── __init__.py
 │   └── cache.py        # Redis缓存实现
 ├── config/             # 配置文件
 │   ├── config.py       # 全局配置
 │   └── prometheus.yml  # Prometheus监控配置
-├── calculation_service/ # 计算服务
+├── database/           # 数据库相关文件
 │   ├── __init__.py
-│   ├── models.py       # 数据模型
-│   ├── schemas.py      # 请求/响应模型
-│   └── service.py      # 服务实现
+│   ├── database.py     # 数据库连接配置
+│   └── init.sql        # 数据库初始化SQL
 ├── fund_service/       # 基金服务
 │   ├── __init__.py
 │   ├── models.py       # 数据模型
@@ -47,71 +47,46 @@
 │   ├── models.py       # 数据模型
 │   ├── schemas.py      # 请求/响应模型
 │   └── service.py      # 服务实现
+├── push_to_github.bat  # 自动推送脚本
+├── requirements.txt    # Python项目依赖
 ├── rule_service/       # 规则服务
 │   ├── __init__.py
 │   ├── models.py       # 数据模型
 │   ├── schemas.py      # 请求/响应模型
 │   └── service.py      # 服务实现
 ├── user_service/       # 用户服务
+│   ├── README.md
 │   ├── __init__.py
 │   ├── main.py         # 用户服务主程序
 │   ├── models.py       # 数据模型
 │   ├── schemas.py      # 请求/响应模型
-│   └── service.py      # 服务实现
-├── database/           # 数据库相关文件
-│   ├── __init__.py
-│   ├── database.py     # 数据库连接配置
-│   └── init.sql        # 数据库初始化SQL
+│   ├── service.py      # 服务实现
+│   └── service_analysis_report.md
 ├── .env.example        # 环境变量示例
 ├── .gitignore          # Git忽略规则
 ├── DEPLOYMENT_GUIDE.md # 部署指南
-├── Dockerfile          # Docker构建文件
-├── docker-compose.yml  # Docker Compose配置
-├── EDGE_CONFIG_README.md # Edge Config配置文档
+├── ENVIRONMENT_SETUP_GUIDE.md # 环境设置指南
 ├── README.md           # 项目说明文档
-├── comprehensive_test.py # 全面测试脚本
-├── requirements.txt    # Python项目依赖
-└── vercel.json         # Vercel部署配置
+├── SECURITY_BEST_PRACTICES.md # 安全最佳实践
+├── vercel.json         # Vercel部署配置
+└── 聚财生态基金后端开发事项.md # 开发事项记录
 ```
 
 ## 技术栈
 - **后端框架**：FastAPI (Python)
 - **数据库**：MySQL 8.0
 - **缓存**：Redis 6
-- **容器化**：Docker, Docker Compose
-- **监控**：Prometheus, Grafana
 - **ORM**：SQLAlchemy
 - **数据验证**：Pydantic
 - **API文档**：Swagger UI (自动生成)
 - **配置管理**：Vercel Edge Config
 - **环境变量管理**：python-dotenv
-- **部署平台**：Vercel (支持)
+- **部署平台**：Vercel
 
 ## 快速开始
 
-### 使用Docker Compose启动（推荐）
-1. 克隆项目代码
-   ```bash
-   git clone [repository-url]
-   cd 聚财生态基金
-   ```
-
-2. 复制环境变量示例文件
-   ```bash
-   cp .env.example .env
-   # 根据需要修改.env文件中的配置
-   ```
-
-3. 启动所有服务
-   ```bash
-   docker-compose up -d --build
-   ```
-
-4. 访问服务
-   - API网关：http://localhost:8080
-   - Swagger文档：http://localhost:8080/docs
-   - Grafana监控：http://localhost:3000 (初始账号/密码: admin/admin)
-   - Prometheus：http://localhost:9090
+### Vercel部署（推荐）
+项目已成功配置为可在Vercel平台上部署，详细部署步骤请参考 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) 文件。
 
 ### 本地开发环境设置
 1. 安装Python 3.9或更高版本
@@ -121,63 +96,27 @@
    pip install -r requirements.txt
    ```
 
-3. 启动数据库和Redis
+3. 复制环境变量示例文件
    ```bash
-   docker-compose up -d mysql redis
+   cp .env.example .env
+   # 根据需要修改.env文件中的配置
    ```
 
-4. 运行单个服务（以API网关为例）
+4. 运行API服务
    ```bash
-   python -m api_gateway.app
+   python app.py
    ```
 
 ## API文档
-系统自动生成Swagger UI文档，访问各服务的/docs路径即可查看详细的API接口说明。
+系统自动生成Swagger UI文档，部署后可通过以下路径查看详细的API接口说明：
+- Swagger文档：`http://[部署域名]/docs`
 
 ### 主要API端点
 
-#### API网关
+#### 核心服务
+- GET / - 服务欢迎页面
 - GET /health - 健康检查
-- GET /status - 服务状态
-
-#### 规则服务
-- POST /rules - 创建规则
-- GET /rules/{rule_id} - 获取规则详情
-- PUT /rules/{rule_id} - 更新规则
-- PATCH /rules/{rule_id}/status - 更新规则状态
-- GET /rules/fund-type/{fund_type} - 获取指定基金类型的规则
-
-#### 新闻服务
-- POST /news - 创建新闻
-- GET /news/{news_id} - 获取新闻详情
-- PUT /news/{news_id} - 更新新闻
-- POST /news/crawl - 爬取新闻
-- POST /news/process/{news_id} - 处理新闻
-
-#### 计算服务
-- POST /calculation/net-value - 计算基金净值
-- GET /calculation/historical/{fund_id} - 获取历史净值
-- POST /calculation/news-impact - 评估新闻影响
-- POST /calculation/batch - 批量计算
-
-#### 基金服务
-- POST /funds - 创建基金
-- GET /funds/{fund_id} - 获取基金详情
-- PUT /funds/{fund_id} - 更新基金
-- GET /funds - 查询基金列表
-- POST /funds/{fund_id}/nav - 添加基金净值
-- GET /funds/{fund_id}/performance - 获取基金绩效
-
-#### 用户服务
-- POST /register - 用户注册
-- POST /login - 用户登录
-- GET /users/me - 获取当前用户信息
-- GET /users/balance - 查询用户余额
-- POST /users/balance/deposit - 存款
-- POST /users/balance/withdraw - 提现
-- POST /transactions - 创建交易（买入/卖出基金）
-- GET /users/holdings - 查询用户持仓
-- GET /users/transactions - 查询用户交易记录
+- GET /welcome - 欢迎信息
 
 ## 配置说明
 所有配置通过环境变量或.env文件设置，主要配置项包括：
@@ -185,32 +124,13 @@
 - Redis连接信息
 - API服务端口和主机
 - 微服务URL
-- 爬虫配置
 - 计算参数配置
 - 交易限额配置（单笔交易金额、每日累计金额、每日交易笔数）
 
-## 监控与日志
-- 服务指标通过Prometheus收集，Grafana可视化展示
-- 日志通过标准输出记录，可通过Docker日志查看
-
 ## 部署指南
 
-### 本地Docker部署
-1. 准备生产环境的.env文件
-2. 执行docker-compose up -d --build
-3. 配置反向代理（如Nginx）
-4. 设置SSL证书
-
-### Vercel自动部署
-项目已配置与GitHub的自动部署集成，步骤如下：
-1. 将代码推送到GitHub仓库
-2. GitHub自动触发Webhook通知Vercel
-3. Vercel开始构建和部署流程：
-   - 读取根目录的`vercel.json`配置
-   - 安装依赖（执行`installCommand`）
-   - 执行构建命令（执行`buildCommand`）
-   - 部署应用
-4. 部署完成后，Vercel会生成预览URL或正式URL
+### Vercel部署
+项目已配置与GitHub的自动部署集成，详细步骤请参考 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。
 
 Vercel配置说明：
 - Python版本：3.9
@@ -222,9 +142,6 @@ Vercel配置说明：
 2. 新功能应在对应服务模块中实现
 3. 所有API端点应有适当的文档和验证
 4. 代码提交前运行测试
-
-## 鸣谢
-感谢所有为该项目做出贡献的开发者和测试人员。
 
 ## 自动推送脚本使用指南
 项目根目录下提供了`push_to_github.bat`脚本，用于一键完成代码提交和推送，步骤如下：

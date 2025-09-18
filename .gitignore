@@ -63,3 +63,4 @@ coverage/
 *.tar.gz
 *.tar
 *.rar
+.vercel

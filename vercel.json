@@ -19,16 +19,6 @@
   "env": {
     "PYTHON_VERSION": "3.9"
   },
-  "functions": {
-    "app.py": {
-      "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
   "installCommand": "pip install -r api/requirements.txt",
   "buildCommand": "echo 'No build step needed for Python FastAPI app'"
 }
