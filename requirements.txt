@@ -11,7 +11,7 @@ python-dotenv==1.0.0
 
 # 数据库相关依赖
 SQLAlchemy==2.0.25
-mariadb==1.1.10
+pymysql==1.1.0
 
 # 其他基本依赖
 # 使用与FastAPI 0.95.2兼容的Pydantic 1.x版本

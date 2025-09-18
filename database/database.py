@@ -25,7 +25,7 @@ def get_database_url():
         return os.environ.get("DATABASE_URL")
     
     # 使用默认配置
-    return f"mariadb+mariadbconnector://{DEFAULT_DB_CONFIG['user']}:{DEFAULT_DB_CONFIG['password']}@{DEFAULT_DB_CONFIG['host']}:{DEFAULT_DB_CONFIG['port']}/{DEFAULT_DB_CONFIG['name']}?charset=utf8mb4"
+    return f"mysql+pymysql://{DEFAULT_DB_CONFIG['user']}:{DEFAULT_DB_CONFIG['password']}@{DEFAULT_DB_CONFIG['host']}:{DEFAULT_DB_CONFIG['port']}/{DEFAULT_DB_CONFIG['name']}?charset=utf8mb4"
 
 # 创建数据库引擎
 # 增加连接池配置，提高连接稳定性
